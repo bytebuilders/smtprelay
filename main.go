@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"net/textproto"
 	"os"
@@ -10,11 +11,18 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/chrj/smtpd"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
+
+func observeErr(err smtpd.Error) smtpd.Error {
+	errorsCounter.WithLabelValues(fmt.Sprintf("%v", err.Code)).Inc()
+
+	return err
+}
 
 func connectionChecker(peer smtpd.Peer) error {
 	// This can't panic because we only have TCP listeners
@@ -34,7 +42,7 @@ func connectionChecker(peer smtpd.Peer) error {
 	log.WithFields(logrus.Fields{
 		"ip": peerIP,
 	}).Warn("Connection refused from address outside of allowed_nets")
-	return smtpd.Error{Code: 421, Message: "Denied"}
+	return observeErr(smtpd.Error{Code: 421, Message: "Denied"})
 }
 
 func addrAllowed(addr string, allowedAddrs []string) bool {
@@ -80,6 +88,13 @@ func addrAllowed(addr string, allowedAddrs []string) bool {
 	return false
 }
 
+func heloChecker(peer smtpd.Peer, addr string) error {
+	// every SMTP request starts with a HELO
+	requestsCounter.Inc()
+
+	return nil
+}
+
 func senderChecker(peer smtpd.Peer, addr string) error {
 	// check sender address from auth file if user is authenticated
 	if localAuthRequired() && peer.Username != "" {
@@ -90,7 +105,7 @@ func senderChecker(peer smtpd.Peer, addr string) error {
 				"peer":     peer.Addr,
 				"username": peer.Username,
 			}).WithError(err).Warn("could not fetch auth user")
-			return smtpd.Error{Code: 451, Message: "Bad sender address"}
+			return observeErr(smtpd.Error{Code: 451, Message: "Bad sender address"})
 		}
 
 		if !addrAllowed(addr, user.allowedAddresses) {
@@ -99,7 +114,7 @@ func senderChecker(peer smtpd.Peer, addr string) error {
 				"username":       peer.Username,
 				"sender_address": addr,
 			}).Warn("sender address not allowed for authenticated user")
-			return smtpd.Error{Code: 451, Message: "Bad sender address"}
+			return observeErr(smtpd.Error{Code: 451, Message: "Bad sender address"})
 		}
 	}
 
@@ -117,7 +132,7 @@ func senderChecker(peer smtpd.Peer, addr string) error {
 		"sender_address": addr,
 		"peer":           peer.Addr,
 	}).Warn("sender address not allowed by allowed_sender pattern")
-	return smtpd.Error{Code: 451, Message: "Bad sender address"}
+	return observeErr(smtpd.Error{Code: 451, Message: "Bad sender address"})
 }
 
 func recipientChecker(peer smtpd.Peer, addr string) error {
@@ -135,7 +150,7 @@ func recipientChecker(peer smtpd.Peer, addr string) error {
 		"peer":              peer.Addr,
 		"recipient_address": addr,
 	}).Warn("recipient address not allowed by allowed_recipients pattern")
-	return smtpd.Error{Code: 451, Message: "Bad recipient address"}
+	return observeErr(smtpd.Error{Code: 451, Message: "Bad recipient address"})
 }
 
 func authChecker(peer smtpd.Peer, username string, password string) error {
@@ -145,7 +160,7 @@ func authChecker(peer smtpd.Peer, username string, password string) error {
 			"peer":     peer.Addr,
 			"username": username,
 		}).WithError(err).Warn("auth error")
-		return smtpd.Error{Code: 535, Message: "Authentication credentials invalid"}
+		return observeErr(smtpd.Error{Code: 535, Message: "Authentication credentials invalid"})
 	}
 	return nil
 }
@@ -184,12 +199,15 @@ func mailHandler(peer smtpd.Peer, env smtpd.Envelope) error {
 		err := cmd.Run()
 		if err != nil {
 			cmdLogger.WithError(err).Error(stderr.String())
-			return smtpd.Error{Code: 554, Message: "External command failed"}
+			return observeErr(smtpd.Error{Code: 554, Message: "External command failed"})
 		}
 
 		cmdLogger.Info("pipe command successful: " + stdout.String())
 	}
 
+	msgSizeHistogram.Observe(float64(len(env.Data)))
+
+	start := time.Now()
 	for _, remote := range remotes {
 		logger = logger.WithField("host", remote.Addr)
 		logger.Info("delivering mail from peer using smarthost")
@@ -218,11 +236,17 @@ func mailHandler(peer smtpd.Peer, env smtpd.Envelope) error {
 					Error("delivery failed")
 			}
 
-			return smtpError
+			durationHistogram.WithLabelValues(fmt.Sprintf("%v", smtpError.Code)).
+				Observe(time.Now().Sub(start).Seconds())
+			return observeErr(smtpError)
 		}
 
-		logger.Debug("delivery successful")
+		log.WithField("host", remote.Hostname).
+			Debug("delivery successful")
 	}
+
+	durationHistogram.WithLabelValues("none").
+		Observe(time.Now().Sub(start).Seconds())
 
 	return nil
 }
@@ -283,6 +307,9 @@ func main() {
 	log.WithField("version", appVersion).
 		Debug("starting smtprelay")
 
+	// config is used here, call after config load
+	go handleMetrics()
+
 	// Load allowed users file
 	if localAuthRequired() {
 		err := AuthLoadFile(*allowedUsers)
@@ -311,6 +338,7 @@ func main() {
 			ConnectionChecker: connectionChecker,
 			SenderChecker:     senderChecker,
 			RecipientChecker:  recipientChecker,
+			HeloChecker:       heloChecker,
 			Handler:           mailHandler,
 		}
 
