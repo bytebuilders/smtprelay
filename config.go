@@ -30,6 +30,7 @@ var (
 	hostName         = flagset.String("hostname", "localhost.localdomain", "Server hostname")
 	welcomeMsg       = flagset.String("welcome_msg", "", "Welcome message for SMTP session")
 	listenStr        = flagset.String("listen", "127.0.0.1:25 [::1]:25", "Address and port to listen for incoming SMTP")
+	metricsListen    = flag.String("metrics_listen", ":8080", "Address and port to listen for metrics exposition")
 	localCert        = flagset.String("local_cert", "", "SSL certificate for STARTTLS/TLS")
 	localKey         = flagset.String("local_key", "", "SSL private key for STARTTLS/TLS")
 	localForceTLS    = flagset.Bool("local_forcetls", false, "Force STARTTLS (needs local_cert and local_key)")
