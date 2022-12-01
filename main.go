@@ -237,7 +237,7 @@ func mailHandler(peer smtpd.Peer, env smtpd.Envelope) error {
 			}
 
 			durationHistogram.WithLabelValues(fmt.Sprintf("%v", smtpError.Code)).
-				Observe(time.Now().Sub(start).Seconds())
+				Observe(time.Since(start).Seconds())
 			return observeErr(smtpError)
 		}
 
@@ -246,7 +246,7 @@ func mailHandler(peer smtpd.Peer, env smtpd.Envelope) error {
 	}
 
 	durationHistogram.WithLabelValues("none").
-		Observe(time.Now().Sub(start).Seconds())
+		Observe(time.Since(start).Seconds())
 
 	return nil
 }
