@@ -76,7 +76,7 @@ func AuthFetch(username string) (*AuthUser, error) {
 			continue
 		}
 
-		if strings.ToLower(username) != strings.ToLower(user.username) {
+		if !strings.EqualFold(username, user.username) {
 			continue
 		}
 
