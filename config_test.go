@@ -5,7 +5,7 @@ import (
 )
 
 func TestSplitProto(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		input string
 		proto string
 		addr  string

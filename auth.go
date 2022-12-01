@@ -9,9 +9,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var (
-	filename string
-)
+var filename string
 
 type AuthUser struct {
 	username         string

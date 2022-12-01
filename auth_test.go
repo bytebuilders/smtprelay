@@ -17,7 +17,7 @@ func stringsEqual(a, b []string) bool {
 }
 
 func TestParseLine(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		name       string
 		expectFail bool
 		line       string

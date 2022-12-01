@@ -229,7 +229,6 @@ func mailHandler(peer smtpd.Peer, env smtpd.Envelope) error {
 
 func generateUUID() string {
 	uniqueID, err := uuid.NewRandom()
-
 	if err != nil {
 		log.WithError(err).
 			Error("could not generate UUIDv4")
@@ -243,7 +242,7 @@ func generateUUID() string {
 func getTLSConfig() *tls.Config {
 	// Ciphersuites as defined in stock Go but without 3DES and RC4
 	// https://golang.org/src/crypto/tls/cipher_suites.go
-	var tlsCipherSuites = []uint16{
+	tlsCipherSuites := []uint16{
 		tls.TLS_AES_128_GCM_SHA256,
 		tls.TLS_AES_256_GCM_SHA384,
 		tls.TLS_CHACHA20_POLY1305_SHA256,
