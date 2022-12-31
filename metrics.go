@@ -46,7 +46,13 @@ func registerMetrics() {
 func handleMetrics() {
 	registerMetrics()
 
+	http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("OK"))
+	}))
 	http.Handle("/metrics", promhttp.Handler())
+
+	log.WithField("address", *metricsListen).
+		Info("starting metrics server")
 	if err := http.ListenAndServe(*metricsListen, nil); err != nil {
 		log.WithField("err", err.Error()).
 			Fatal("cannot publish metrics")
