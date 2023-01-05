@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"net/textproto"
 	"os"
 	"os/exec"
@@ -95,7 +97,69 @@ func heloChecker(peer smtpd.Peer, addr string) error {
 	return nil
 }
 
+func fetchInstallerMetadata(url, authHeader string) (InstallerMetadata, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return InstallerMetadata{}, err
+	}
+
+	req.Header.Set("Authorization", authHeader)
+	fmt.Println(authHeader, url)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return InstallerMetadata{}, err
+	}
+
+	meta := InstallerMetadata{}
+	if err = json.NewDecoder(resp.Body).Decode(&meta); err != nil {
+		return InstallerMetadata{}, err
+	}
+
+	return meta, nil
+}
+
+type InstallerMetadata struct {
+	ID         string `json:"ID"`
+	Domain     string `json:"domain"`
+	HostedURL  string `json:"hostedURL"`
+	OwnerID    int64  `json:"ownerID"`
+	AuthorID   int64  `json:"authorID"`
+	AuthorName string `json:"authorName,omitempty"`
+	Production bool   `json:"production"`
+
+	CreateTimestamp time.Time `json:"createTimestamp"`
+	ExpiryTimestamp time.Time `json:"expiryTimestamp,omitempty"`
+}
+
 func senderChecker(peer smtpd.Peer, addr string) error {
+	if *authEndpoint != "" && peer.Username != "" {
+		// Get installer metadata
+		// username and sender matches the demo@${installer-domain}
+		md, err := fetchInstallerMetadata(*authEndpoint, peer.Password)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"peer":     peer.Addr,
+				"username": peer.Username,
+			}).WithError(err).Warn("could not fetch installer metadata from auth endpoint")
+			return observeErr(smtpd.Error{Code: 451, Message: "Failed to check authentication server"})
+		}
+		if peer.Username != "demo@"+md.Domain {
+			log.WithFields(logrus.Fields{
+				"peer":     peer.Addr,
+				"username": peer.Username,
+			}).WithError(err).Warn("auth error")
+			return observeErr(smtpd.Error{Code: 535, Message: "Authentication username does not match installer domain"})
+		}
+		if addr != "demo@"+md.Domain {
+			log.WithFields(logrus.Fields{
+				"peer":           peer.Addr,
+				"username":       peer.Username,
+				"sender_address": addr,
+			}).Warn("sender address not allowed for authenticated user")
+			return observeErr(smtpd.Error{Code: 451, Message: "Bad sender address"})
+		}
+	}
+
 	// check sender address from auth file if user is authenticated
 	if localAuthRequired() && peer.Username != "" {
 		user, err := AuthFetch(peer.Username)
@@ -342,7 +406,7 @@ func main() {
 			Handler:           mailHandler,
 		}
 
-		if localAuthRequired() {
+		if authRequired() {
 			server.Authenticator = authChecker
 		}
 

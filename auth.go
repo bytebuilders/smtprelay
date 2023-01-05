@@ -87,6 +87,11 @@ func AuthFetch(username string) (*AuthUser, error) {
 }
 
 func AuthCheckPassword(username string, secret string) error {
+	if *authEndpoint != "" {
+		// authN done in SenderChecker
+		return nil
+	}
+
 	user, err := AuthFetch(username)
 	if err != nil {
 		return err
