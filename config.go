@@ -44,6 +44,7 @@ var (
 	allowedSenderStr = flagset.String("allowed_sender", "", "Regular expression for valid FROM EMail addresses")
 	allowedRecipStr  = flagset.String("allowed_recipients", "", "Regular expression for valid TO EMail addresses")
 	allowedUsers     = flagset.String("allowed_users", "", "Path to file with valid users/passwords")
+	authEndpoint     = flagset.String("auth_endpoint", "", "ByteBuilders auth endpoint")
 	command          = flagset.String("command", "", "Path to pipe command")
 	remotesStr       = flagset.String("remotes", "", "Outgoing SMTP servers")
 
@@ -64,6 +65,10 @@ var (
 
 func localAuthRequired() bool {
 	return *allowedUsers != ""
+}
+
+func authRequired() bool {
+	return *allowedUsers != "" || *authEndpoint != ""
 }
 
 func setupAllowedNetworks() {
