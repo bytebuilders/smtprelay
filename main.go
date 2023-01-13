@@ -101,7 +101,7 @@ func senderChecker(peer smtpd.Peer, addr string) error {
 	if *authEndpoint != "" && peer.Username != "" {
 		// Get installer metadata
 		// username and sender matches the demo@${installer-domain}
-		md, err := client.GetInstallerMetadata(*authEndpoint, peer.Password)
+		md, err := client.GetInstallerMetadata(*authEndpoint, "Bearer "+peer.Password)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"peer":     peer.Addr,
@@ -109,14 +109,14 @@ func senderChecker(peer smtpd.Peer, addr string) error {
 			}).WithError(err).Warn("could not fetch installer metadata from auth endpoint")
 			return observeErr(smtpd.Error{Code: 451, Message: "Failed to check authentication server"})
 		}
-		if peer.Username != "demo@"+md.HostedDomain {
+		if strings.Replace(peer.Username, "@", ".", 1) != md.HostedDomain {
 			log.WithFields(logrus.Fields{
 				"peer":     peer.Addr,
 				"username": peer.Username,
 			}).WithError(err).Warn("auth error")
 			return observeErr(smtpd.Error{Code: 535, Message: "Authentication username does not match installer domain"})
 		}
-		if addr != "demo@"+md.HostedDomain {
+		if strings.Replace(addr, "@", ".", 1) != md.HostedDomain {
 			log.WithFields(logrus.Fields{
 				"peer":           peer.Addr,
 				"username":       peer.Username,
