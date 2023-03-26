@@ -24,7 +24,7 @@ BIN      := smtprelay
 COMPRESS ?= no
 
 # Where to push the docker image.
-REGISTRY ?= appscode
+REGISTRY ?= ghcr.io/appscode
 SRC_REG  ?=
 
 # This version-strategy uses git tags to set the version string
@@ -72,8 +72,8 @@ TAG              := $(VERSION)_$(OS)_$(ARCH)
 TAG_PROD         := $(TAG)
 TAG_DBG          := $(VERSION)-dbg_$(OS)_$(ARCH)
 
-GO_VERSION       ?= 1.19
-BUILD_IMAGE      ?= appscode/golang-dev:$(GO_VERSION)
+GO_VERSION       ?= 1.20
+BUILD_IMAGE      ?= ghcr.io/appscode/golang-dev:$(GO_VERSION)
 CHART_TEST_IMAGE ?= quay.io/helmpack/chart-testing:v3.5.1
 
 OUTBIN = bin/$(BIN)-$(OS)-$(ARCH)
@@ -356,6 +356,7 @@ install:
 	@cd ../installer; \
 	helm upgrade -i smtprelay charts/smtprelay --wait \
 		--namespace=$(KUBE_NAMESPACE) --create-namespace \
+		--set registryFQDN="" \
 		--set image.registry=$(REGISTRY) \
 		--set image.tag=$(TAG_PROD) \
 		--set imagePullPolicy=$(IMAGE_PULL_POLICY) \
