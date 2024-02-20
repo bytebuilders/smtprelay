@@ -17,8 +17,13 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"fmt"
+	"net/url"
+
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	store "kmodules.xyz/objectstore-api/api/v1"
+	"kmodules.xyz/resource-metadata/apis/shared"
 )
 
 const (
@@ -59,28 +64,42 @@ type AceOptionsSpec struct {
 	KubedbUi      AceOptionsComponentSpec `json:"kubedb-ui"`
 	MarketplaceUi AceOptionsComponentSpec `json:"marketplace-ui"`
 	PlatformApi   AceOptionsComponentSpec `json:"platform-api"`
-	PromProxy     AceOptionsComponentSpec `json:"prom-proxy"`
+	PlatformLinks AceOptionsComponentSpec `json:"platform-links"`
 	Ingress       AceOptionsIngressNginx  `json:"ingress"`
 	Nats          AceOptionsNatsSettings  `json:"nats"`
 	Trickster     AceOptionsComponentSpec `json:"trickster"`
 	DNSProxy      AceOptionsComponentSpec `json:"dns-proxy"`
 	SMTPRelay     AceOptionsComponentSpec `json:"smtprelay"`
 	Minio         AceOptionsComponentSpec `json:"minio"`
+	Branding      AceBrandingSpec         `json:"branding"`
 }
 
 type RegistrySpec struct {
 	//+optional
-	RegistryFQDN string `json:"registryFQDN"`
+	Image shared.ImageRegistrySpec `json:"image"`
 	//+optional
-	Registry string `json:"registry"`
+	Credentials RepositoryCredential `json:"credentials"`
 	//+optional
-	PreserveOrganization bool `json:"preserveOrganization"`
+	Helm HelmOptions `json:"helm"`
 	//+optional
 	AllowNondistributableArtifacts bool `json:"allowNondistributableArtifacts"`
 	//+optional
 	Insecure bool `json:"insecure"`
+}
+
+type RepositoryCredential struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type HelmOptions struct {
 	//+optional
-	ImagePullSecrets []string `json:"imagePullSecrets"`
+	Repositories HelmRepositories `json:"repositories"`
+}
+
+type HelmRepositories struct {
+	//+optional
+	AppscodeChartsOci string `json:"appscode-charts-oci"`
 }
 
 type AceOptionsComponentSpec struct {
@@ -132,10 +151,31 @@ type AceOptionsNatsSettings struct {
 
 type AceOptionsPlatformInfra struct {
 	StorageClass  LocalObjectReference         `json:"storageClass"`
-	Stash         InfraStash                   `json:"stash"`
+	KubeStash     KubeStashOptions             `json:"kubestash"`
 	TLS           AceOptionsInfraTLS           `json:"tls"`
 	DNS           InfraDns                     `json:"dns"`
 	CloudServices AceOptionsInfraCloudServices `json:"cloudServices"`
+}
+
+type KubeStashOptions struct {
+	// Schedule specifies the schedule for invoking backup sessions
+	// +optional
+	Schedule string `json:"schedule,omitempty"`
+	// RetentionPolicy indicates the policy to follow to clean old backup snapshots
+	// +kubebuilder:default=keep-1mo
+	RetentionPolicy KubeStashRetentionPolicy `json:"retentionPolicy"`
+	StorageSecret   OptionalResource         `json:"storageSecret"`
+	Backend         KubeStashBackendInfra    `json:"backend"`
+}
+
+type KubeStashBackendInfra struct {
+	Provider string `json:"provider"`
+	// +optional
+	S3 store.S3Spec `json:"s3"`
+	// +optional
+	Azure store.AzureSpec `json:"azure"`
+	// +optional
+	GCS store.GCSSpec `json:"gcs"`
 }
 
 type AceOptionsInfraTLS struct {
@@ -151,9 +191,43 @@ type AceOptionsInfraCloudServices struct {
 	Kms *AceOptionsInfraKms `json:"kms,omitempty"`
 }
 
+func (cs *AceOptionsInfraCloudServices) ObjStoreURL() string {
+	if cs.Provider == ObjstoreProviderS3 {
+		ur, _ := url.Parse(cs.Objstore.Bucket)
+		values := ur.Query()
+		values.Set("region", cs.Objstore.Region)
+		if cs.Objstore.Endpoint != "" {
+			values.Set("endpoint", cs.Objstore.Endpoint)
+		}
+		ur.RawQuery = values.Encode()
+		return ur.String()
+	}
+	return cs.Objstore.Bucket
+}
+
+func (cs *AceOptionsInfraCloudServices) GenerateExportEnv() string {
+	switch cs.Provider {
+	case ObjstoreProviderS3:
+		return fmt.Sprintf(`export AWS_ACCESS_KEY_ID=%s
+export AWS_SECRET_ACCESS_KEY=%s`, cs.Objstore.Auth.S3.AwsAccessKeyID, cs.Objstore.Auth.S3.AwsSecretAccessKey)
+	case ObjstoreProviderGCS:
+		return fmt.Sprintf(`echo %s > google_credentials.json
+export GOOGLE_APPLICATION_CREDENTIALS=google_credentials.json`, cs.Objstore.Auth.GCS.GoogleServiceAccountJSONKey)
+	case ObjstoreProviderAzure:
+		return fmt.Sprintf(`export AZURE_STORAGE_ACCOUNT=%s
+export AZURE_STORAGE_KEY=%s`, cs.Objstore.Auth.Azure.AzureAccountName, cs.Objstore.Auth.Azure.AzureAccountKey)
+	default:
+		return ""
+	}
+}
+
 type AceOptionsInfraObjstore struct {
-	Host   string       `json:"host"`
-	Bucket string       `json:"bucket"`
+	Bucket string `json:"bucket"`
+	Prefix string `json:"prefix,omitempty"`
+	// Required for s3 type buckets other than AWS s3 buckets
+	Endpoint string `json:"endpoint,omitempty"`
+	// Required for s3 buckets
+	Region string       `json:"region,omitempty"`
 	Auth   ObjstoreAuth `json:"auth"`
 }
 
@@ -161,7 +235,6 @@ type ObjstoreAuth struct {
 	S3    *S3Auth    `json:"s3,omitempty"`
 	Azure *AzureAuth `json:"azure,omitempty"`
 	GCS   *GCSAuth   `json:"gcs,omitempty"`
-	Swift *SwiftAuth `json:"swift,omitempty"`
 }
 
 type AceOptionsInfraKms struct {
@@ -169,9 +242,10 @@ type AceOptionsInfraKms struct {
 }
 
 type AceOptionsSettings struct {
-	DB    AceOptionsDBSettings    `json:"db"`
-	Cache AceOptionsCacheSettings `json:"cache"`
-	SMTP  AceOptionsSMTPSettings  `json:"smtp"`
+	DB              AceOptionsDBSettings    `json:"db"`
+	Cache           AceOptionsCacheSettings `json:"cache"`
+	SMTP            AceOptionsSMTPSettings  `json:"smtp"`
+	DomainWhiteList []string                `json:"domainWhiteList"`
 }
 
 type AceOptionsDBSettings struct {
@@ -185,6 +259,7 @@ type AceOptionsCacheSettings struct {
 }
 
 type AceOptionsSMTPSettings struct {
+	Enabled    bool   `json:"enabled"`
 	Host       string `json:"host"`
 	TlsEnabled bool   `json:"tlsEnabled"`
 	From       string `json:"from"`
@@ -216,15 +291,62 @@ func (dt DeploymentType) Demo() bool {
 }
 
 type AceDeploymentContext struct {
-	DeploymentType     DeploymentType `json:"deploymentType"`
-	RequestedDomain    string         `json:"requestedDomain"`
-	HostedDomain       string         `json:"hostedDomain,omitempty"`
-	RequesterName      string         `json:"requesterName,omitempty"`
-	RequesterEmail     string         `json:"requesterEmail,omitempty"`
-	ProxyServiceDomain string         `json:"proxyServiceDomain,omitempty"`
-	Token              string         `json:"token,omitempty"`
-	ClusterID          string         `json:"clusterID"`
-	License            string         `json:"license,omitempty"`
+	DeploymentType       DeploymentType `json:"deploymentType"`
+	RequestedDomain      string         `json:"requestedDomain"`
+	HostedDomain         string         `json:"hostedDomain,omitempty"`
+	RequesterDisplayName string         `json:"requesterDisplayName,omitempty"`
+	RequesterUsername    string         `json:"requesterUsername,omitempty"`
+	ProxyServiceDomain   string         `json:"proxyServiceDomain,omitempty"`
+	Token                string         `json:"token,omitempty"`
+	// +optional
+	OfflineInstaller bool `json:"offlineInstaller"`
+	// WARNING!!! Update docs in schema/ace-options/patch.yaml
+	// +optional
+	ClusterID string `json:"clusterID"`
+	// +optional
+	PublicIPs []string          `json:"publicIPs"`
+	Licenses  map[string]string `json:"licenses,omitempty"`
+	// +optional
+	Admin AcePlatformAdmin `json:"admin"`
+
+	PromotedToProduction bool             `json:"promotedToProduction,omitempty"`
+	PromotionValues      *PromotionValues `json:"promotionValues,omitempty"`
+
+	GeneratedValues `json:",inline,omitempty"`
+}
+
+type GeneratedValues struct {
+	// +optional
+	AdminPassword string `json:"adminPassword"`
+	// +optional
+	BackupPassword string `json:"backupPassword"`
+	// +optional
+	PostgresPassword string `json:"postgresPassword"`
+	// +optional
+	RedisPassword string `json:"redisPassword"`
+	// +optional
+	Oauth2JWTSecret string `json:"oauth2JWTSecret"`
+	// +optional
+	CsrfSecretKey string `json:"csrfSecretKey"`
+	// +optional
+	S3AccessKeyID string `json:"s3AccessKeyID"`
+	// +optional
+	S3AccessKeySecret string `json:"s3AccessKeySecret"`
+	// +optional
+	Nats map[string]string `json:"nats"`
+	// +optional
+	ServiceBackendCookie Cookie `json:"serviceBackendCookie"`
+}
+
+type PromotionValues struct {
+	Minio AceOptionsInfraObjstore `json:"minio,omitempty"`
+}
+
+type AcePlatformAdmin struct {
+	Username    string `json:"username,omitempty"`
+	Password    string `json:"password,omitempty"`
+	Email       string `json:"email,omitempty"`
+	DisplayName string `json:"displayName,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

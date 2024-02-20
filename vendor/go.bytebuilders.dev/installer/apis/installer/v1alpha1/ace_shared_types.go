@@ -46,14 +46,14 @@ type AutoscalingSpec struct {
 type MonitoringAgent string
 
 type Monitoring struct {
-	Agent          MonitoringAgent       `json:"agent"`
-	ServiceMonitor *ServiceMonitorLabels `json:"serviceMonitor"`
+	Agent          MonitoringAgent      `json:"agent"`
+	ServiceMonitor ServiceMonitorLabels `json:"serviceMonitor"`
 }
 
 type CustomMonitoring struct {
-	Agent          MonitoringAgent       `json:"agent"`
-	Port           int                   `json:"port"`
-	ServiceMonitor *ServiceMonitorLabels `json:"serviceMonitor"`
+	Agent          MonitoringAgent      `json:"agent"`
+	Port           int                  `json:"port"`
+	ServiceMonitor ServiceMonitorLabels `json:"serviceMonitor"`
 }
 
 type ServiceMonitorLabels struct {
@@ -105,4 +105,13 @@ type AceSettingsSecretName struct {
 
 type PersistenceSpec struct {
 	Size resource.Quantity `json:"size"`
+}
+
+type AceBrandingSpec struct {
+	//+optional
+	PrimaryColor string `json:"primaryColor"`
+	// +optional
+	Logo string `json:"logo"`
+	//+optional
+	Favicon string `json:"favicon"`
 }

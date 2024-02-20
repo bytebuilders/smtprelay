@@ -47,10 +47,23 @@ type IngressNginxSpec struct {
 	Controller IngressNginxController `json:"controller"`
 	// +optional
 	TCP map[string]string `json:"tcp,omitempty"`
+	// +optional
+	DefaultBackend IngressNginxDefaultBackend `json:"defaultBackend"`
+}
+
+type IngressNginxDefaultBackend struct {
+	Enabled bool                            `json:"enabled"`
+	Name    string                          `json:"name"`
+	Image   IngressNginxDefaultBackendImage `json:"image"`
+}
+
+type IngressNginxDefaultBackendImage struct {
+	Registry string `json:"registry"`
 }
 
 type IngressNginxController struct {
 	Image                IngressNginxControllerImage                `json:"image"`
+	Config               map[string]string                          `json:"config"`
 	HostPort             *IngressNginxControllerHostPort            `json:"hostPort,omitempty"`
 	IngressClassByName   bool                                       `json:"ingressClassByName"`
 	IngressClassResource IngressNginxControllerIngressClassResource `json:"ingressClassResource"`
@@ -59,8 +72,13 @@ type IngressNginxController struct {
 	NodeSelector map[string]string              `json:"nodeSelector"`
 	Service      *IngressNginxControllerService `json:"service,omitempty"`
 	//+optional
-	Resources         core.ResourceRequirements     `json:"resources"`
-	AdmissionWebhooks IngressNginxAdmissionWebhooks `json:"admissionWebhooks"`
+	Resources         core.ResourceRequirements           `json:"resources"`
+	AdmissionWebhooks IngressNginxAdmissionWebhooks       `json:"admissionWebhooks"`
+	NetworkPolicy     IngressNginxControllerNetworkPolicy `json:"networkPolicy"`
+}
+
+type IngressNginxControllerNetworkPolicy struct {
+	Enabled bool `json:"enabled"`
 }
 
 type IngressNginxControllerImage struct {
@@ -94,7 +112,8 @@ type IngressNginxControllerServiceExternal struct {
 }
 
 type IngressNginxAdmissionWebhooks struct {
-	Patch IngressNginxAdmissionWebhooksPatch `json:"patch"`
+	Enabled bool                               `json:"enabled"`
+	Patch   IngressNginxAdmissionWebhooksPatch `json:"patch"`
 }
 
 type IngressNginxAdmissionWebhooksPatch struct {

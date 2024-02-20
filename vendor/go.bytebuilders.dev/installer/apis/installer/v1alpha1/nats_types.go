@@ -76,21 +76,23 @@ type NatsSpec struct {
 	Exporter                  NatsExporterSpec                `json:"exporter"`
 	Auth                      NatsAuthSpec                    `json:"auth"`
 	Websocket                 NatsWebsocketSpec               `json:"websocket"`
-	AppProtocol               NatsAppProtocolSpec             `json:"appProtocol"`
 	NetworkPolicy             NatsNetworkPolicySpec           `json:"networkPolicy"`
 	K8SClusterDomain          string                          `json:"k8sClusterDomain"`
 	UseFQDN                   bool                            `json:"useFQDN"`
 	CommonLabels              map[string]string               `json:"commonLabels"`
 	PodManagementPolicy       string                          `json:"podManagementPolicy"`
+	PidVolume                 NatsTempVolume                  `json:"pidVolume"`
+	AdvertiseconfigVolume     NatsTempVolume                  `json:"advertiseconfigVolume"`
 }
 
 type NatsServerSpec struct {
-	Image                         string                    `json:"image"`
-	PullPolicy                    string                    `json:"pullPolicy"`
+	Image                         NatsImageRef              `json:"image"`
 	ServerNamePrefix              string                    `json:"serverNamePrefix"`
 	ServerTags                    []string                  `json:"serverTags"`
 	Profiling                     NatsServerProfilingSpec   `json:"profiling"`
 	Healthcheck                   NatsServerHealthcheckSpec `json:"healthcheck"`
+	HostNetwork                   bool                      `json:"hostNetwork"`
+	DnsPolicy                     string                    `json:"dnsPolicy"`
 	ConfigChecksumAnnotation      bool                      `json:"configChecksumAnnotation"`
 	SecurityContext               *core.SecurityContext     `json:"securityContext"`
 	ExternalAccess                bool                      `json:"externalAccess"`
@@ -100,9 +102,11 @@ type NatsServerSpec struct {
 	SelectorLabels                map[string]string         `json:"selectorLabels"`
 	Resources                     core.ResourceRequirements `json:"resources"`
 	Client                        NatsServerClientSpec      `json:"client"`
+	ExtraEnv                      []string                  `json:"extraEnv"`
 	Limits                        NatsServerLimitsSpec      `json:"limits"`
 	TerminationGracePeriodSeconds *int64                    `json:"terminationGracePeriodSeconds"`
 	Logging                       NatsLoggingSpec           `json:"logging"`
+	Mappings                      NatsMappings              `json:"mappings"`
 	Jetstream                     JetstreamSpec             `json:"jetstream"`
 	TLS                           *NatsServerTLSSpec        `json:"tls,omitempty"`
 }
@@ -113,16 +117,17 @@ type NatsServerProfilingSpec struct {
 }
 
 type NatsServerHealthcheckSpec struct {
-	DetectHealthz bool           `json:"detectHealthz"`
-	EnableHealthz bool           `json:"enableHealthz"`
-	Liveness      *LivenessProbe `json:"liveness"`
-	Readiness     *Probe         `json:"readiness"`
-	Startup       *Probe         `json:"startup"`
+	DetectHealthz                  bool           `json:"detectHealthz"`
+	EnableHealthz                  bool           `json:"enableHealthz"`
+	EnableHealthzLivenessReadiness bool           `json:"enableHealthzLivenessReadiness"`
+	Liveness                       *LivenessProbe `json:"liveness"`
+	Readiness                      *Probe         `json:"readiness"`
+	Startup                        *Probe         `json:"startup"`
 }
 
 type LivenessProbe struct {
 	Probe                         `json:",inline"`
-	TerminationGracePeriodSeconds *int64 `json:"terminationGracePeriodSeconds"`
+	TerminationGracePeriodSeconds *int64 `json:"terminationGracePeriodSeconds,omitempty"`
 }
 
 type Probe struct {
@@ -166,13 +171,16 @@ type NatsLoggingSpec struct {
 	ReconnectErrorReports *string `json:"reconnectErrorReports"`
 }
 
+type NatsMappings struct{}
+
 type JetstreamSpec struct {
-	Enabled     bool                 `json:"enabled"`
-	Domain      *string              `json:"domain"`
-	UniqueTag   *string              `json:"uniqueTag"`
-	Encryption  runtime.RawExtension `json:"encryption"`
-	MemStorage  JetstreamMemStorage  `json:"memStorage"`
-	FileStorage JetstreamFileStorage `json:"fileStorage"`
+	Enabled               bool                 `json:"enabled"`
+	Domain                *string              `json:"domain"`
+	UniqueTag             *string              `json:"uniqueTag"`
+	MaxOutstandingCatchup *string              `json:"max_outstanding_catchup"`
+	Encryption            runtime.RawExtension `json:"encryption"`
+	MemStorage            JetstreamMemStorage  `json:"memStorage"`
+	FileStorage           JetstreamFileStorage `json:"fileStorage"`
 }
 
 type JetstreamMemStorage struct {
@@ -191,7 +199,7 @@ type JetstreamFileStorage struct {
 }
 
 type NatsServerTLSSpec struct {
-	AllowNonTLS bool                 `json:"allow_non_tls"`
+	AllowNonTLS bool                 `json:"allowNonTLS"`
 	Secret      LocalObjectReference `json:"secret"`
 	Ca          string               `json:"ca"`
 	Cert        string               `json:"cert"`
@@ -208,6 +216,7 @@ type NatsMqttSpec struct {
 type NatsPodDisruptionBudgetSpec struct {
 	Enabled        bool `json:"enabled"`
 	MaxUnavailable int  `json:"maxUnavailable"`
+	MinAvailable   int  `json:"minAvailable,omitempty"`
 }
 
 type NatsClusterSpec struct {
@@ -260,22 +269,32 @@ type TLSSpec struct {
 	Key    string               `json:"key"`
 }
 
+type NatsImageRef struct {
+	Repository string `json:"repository"`
+	Tag        string `json:"tag"`
+	PullPolicy string `json:"pullPolicy"`
+	Registry   string `json:"registry,omitempty"`
+}
+
 type NatsBootconfigSpec struct {
-	Image           string                `json:"image"`
-	PullPolicy      string                `json:"pullPolicy"`
-	SecurityContext *core.SecurityContext `json:"securityContext"`
+	Image NatsImageRef `json:"image"`
+	//+optional
+	Resources       core.ResourceRequirements `json:"resources"`
+	SecurityContext *core.SecurityContext     `json:"securityContext"`
 }
 
 type NatsboxSpec struct {
-	Enabled          bool                  `json:"enabled"`
-	Image            string                `json:"image"`
-	PullPolicy       string                `json:"pullPolicy"`
-	SecurityContext  *core.SecurityContext `json:"securityContext"`
-	AdditionalLabels map[string]string     `json:"additionalLabels"`
-	ImagePullSecrets []string              `json:"imagePullSecrets"`
-	PodAnnotations   map[string]string     `json:"podAnnotations"`
-	PodLabels        map[string]string     `json:"podLabels"`
-	Affinity         *core.Affinity        `json:"affinity"`
+	Enabled bool         `json:"enabled"`
+	Image   NatsImageRef `json:"image"`
+	//+optional
+	Resources        core.ResourceRequirements `json:"resources"`
+	Annotations      map[string]string         `json:"annotations"`
+	SecurityContext  *core.SecurityContext     `json:"securityContext"`
+	AdditionalLabels map[string]string         `json:"additionalLabels"`
+	ImagePullSecrets []string                  `json:"imagePullSecrets"`
+	PodAnnotations   map[string]string         `json:"podAnnotations"`
+	PodLabels        map[string]string         `json:"podLabels"`
+	Affinity         *core.Affinity            `json:"affinity"`
 	//+optional
 	NodeSelector      map[string]string  `json:"nodeSelector"`
 	Tolerations       []core.Toleration  `json:"tolerations"`
@@ -284,19 +303,20 @@ type NatsboxSpec struct {
 }
 
 type NatsReloaderSpec struct {
-	Enabled         bool                  `json:"enabled"`
-	Image           string                `json:"image"`
-	PullPolicy      string                `json:"pullPolicy"`
-	SecurityContext *core.SecurityContext `json:"securityContext"`
-	ExtraConfigs    []string              `json:"extraConfigs"`
+	Enabled         bool                      `json:"enabled"`
+	Image           NatsImageRef              `json:"image"`
+	Resources       core.ResourceRequirements `json:"resources"`
+	SecurityContext *core.SecurityContext     `json:"securityContext"`
+	ExtraConfigs    []string                  `json:"extraConfigs"`
 }
 
 type NatsExporterSpec struct {
 	Enabled         bool                           `json:"enabled"`
-	Image           string                         `json:"image"`
-	PullPolicy      string                         `json:"pullPolicy"`
+	Image           NatsImageRef                   `json:"image"`
+	PortName        string                         `json:"portName"`
 	SecurityContext *core.SecurityContext          `json:"securityContext"`
 	Resources       core.ResourceRequirements      `json:"resources"`
+	Args            []string                       `json:"args"`
 	ServiceMonitor  NatsExporterServiceMonitorSpec `json:"serviceMonitor"`
 }
 
@@ -368,6 +388,12 @@ type NatsNetworkPolicySpec struct {
 	IngressNSMatchLabels    map[string]string                     `json:"ingressNSMatchLabels"`
 	IngressNSPodMatchLabels map[string]string                     `json:"ingressNSPodMatchLabels"`
 }
+
+type NatsTempVolume struct {
+	EmptyDir EmptyDir `json:"emptyDir"`
+}
+
+type EmptyDir struct{}
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 

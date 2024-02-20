@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	core "k8s.io/api/core/v1"
+	networking "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -46,7 +47,11 @@ type Reloader struct {
 type ReloaderSpec struct {
 	Global     ReloaderGlobal     `json:"global"`
 	Kubernetes ReloaderKubernetes `json:"kubernetes"`
-	Reloader   ReloaderDetails    `json:"reloader"`
+	//+optional
+	NameOverride string `json:"nameOverride"`
+	//+optional
+	FullnameOverride string          `json:"fullnameOverride"`
+	Reloader         ReloaderDetails `json:"reloader"`
 }
 
 type ReloaderGlobal struct {
@@ -58,25 +63,33 @@ type ReloaderKubernetes struct {
 }
 
 type ReloaderDetails struct {
-	IsArgoRollouts         bool                       `json:"isArgoRollouts"`
-	IsOpenshift            bool                       `json:"isOpenshift"`
-	IgnoreSecrets          bool                       `json:"ignoreSecrets"`
-	IgnoreConfigMaps       bool                       `json:"ignoreConfigMaps"`
-	ReloadOnCreate         bool                       `json:"reloadOnCreate"`
-	ReloadStrategy         string                     `json:"reloadStrategy"`
-	IgnoreNamespaces       string                     `json:"ignoreNamespaces"`
-	LogFormat              string                     `json:"logFormat"`
-	WatchGlobally          bool                       `json:"watchGlobally"`
-	ReadOnlyRootFileSystem bool                       `json:"readOnlyRootFileSystem"`
-	Legacy                 ReloaderLegacy             `json:"legacy"`
-	MatchLabels            map[string]string          `json:"matchLabels"`
-	Deployment             ReloaderDeploymentSpec     `json:"deployment"`
-	Service                ReloaderServiceSpec        `json:"service"`
-	Rbac                   ReloaderRbacSpec           `json:"rbac"`
-	ServiceAccount         ReloaderServiceAccountSpec `json:"serviceAccount"`
-	CustomAnnotations      map[string]string          `json:"custom_annotations"`
-	ServiceMonitor         ReloaderServiceMonitorSpec `json:"serviceMonitor"`
-	PodMonitor             ReloaderPodMonitorSpec     `json:"podMonitor"`
+	AutoReloadAll          bool                        `json:"autoReloadAll"`
+	IsArgoRollouts         bool                        `json:"isArgoRollouts"`
+	IsOpenshift            bool                        `json:"isOpenshift"`
+	IgnoreSecrets          bool                        `json:"ignoreSecrets"`
+	EnableHA               bool                        `json:"enableHA"`
+	IgnoreConfigMaps       bool                        `json:"ignoreConfigMaps"`
+	SyncAfterRestart       bool                        `json:"syncAfterRestart"`
+	ReloadOnCreate         bool                        `json:"reloadOnCreate"`
+	ReloadStrategy         string                      `json:"reloadStrategy"`
+	IgnoreNamespaces       string                      `json:"ignoreNamespaces"`
+	NamespaceSelector      string                      `json:"namespaceSelector"`
+	ResourceLabelSelector  string                      `json:"resourceLabelSelector"`
+	LogFormat              string                      `json:"logFormat"`
+	WatchGlobally          bool                        `json:"watchGlobally"`
+	ReadOnlyRootFileSystem bool                        `json:"readOnlyRootFileSystem"`
+	Legacy                 ReloaderLegacy              `json:"legacy"`
+	MatchLabels            map[string]string           `json:"matchLabels"`
+	Deployment             ReloaderDeploymentSpec      `json:"deployment"`
+	Service                ReloaderServiceSpec         `json:"service"`
+	Rbac                   ReloaderRbacSpec            `json:"rbac"`
+	ServiceAccount         ReloaderServiceAccountSpec  `json:"serviceAccount"`
+	CustomAnnotations      map[string]string           `json:"custom_annotations"`
+	ServiceMonitor         ReloaderServiceMonitorSpec  `json:"serviceMonitor"`
+	PodMonitor             ReloaderPodMonitorSpec      `json:"podMonitor"`
+	PodDisruptionBudget    ReloaderPodDisruptionBudget `json:"podDisruptionBudget"`
+	Netpol                 ReloaderNetpol              `json:"netpol"`
+	WebhookUrl             string                      `json:"webhookUrl"`
 }
 
 type ReloaderLegacy struct {
@@ -100,6 +113,16 @@ type ReloaderDeploymentSpec struct {
 	Resources                core.ResourceRequirements `json:"resources"`
 	Pod                      ReloaderPodSpec           `json:"pod"`
 	PriorityClassName        string                    `json:"priorityClassName"`
+	// TopologySpreadConstraints describes how a group of pods ought to spread across topology
+	// domains. Scheduler will schedule pods in a way which abides by the constraints.
+	// All topologySpreadConstraints are ANDed.
+	// +optional
+	// +patchMergeKey=topologyKey
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=topologyKey
+	// +listMapKey=whenUnsatisfiable
+	TopologySpreadConstraints []core.TopologySpreadConstraint `json:"topologySpreadConstraints" patchStrategy:"merge" patchMergeKey:"topologyKey"`
 }
 
 type ReloaderLabels struct {
@@ -115,9 +138,14 @@ type ReloaderImageReference struct {
 }
 
 type ReloaderEnvVars struct {
-	Open   []EnvVar `json:"open"`
-	Secret []EnvVar `json:"secret"`
-	Field  []EnvVar `json:"field"`
+	Open     map[string]string `json:"open"`
+	Secret   map[string]string `json:"secret"`
+	Field    map[string]string `json:"field"`
+	Existing *ReloaderExisting `json:"existing"`
+}
+
+type ReloaderExisting struct {
+	ExistingSecretName map[string]string `json:"existing_secret_name,omitempty"`
 }
 
 type ReloaderPodSpec struct {
@@ -143,11 +171,39 @@ type ReloaderServiceAccountSpec struct {
 }
 
 type ReloaderServiceMonitorSpec struct {
-	Enabled bool `json:"enabled"`
+	Enabled     bool              `json:"enabled"`
+	Labels      map[string]string `json:"labels"`
+	Annotations map[string]string `json:"annotations"`
+	HonorLabels bool              `json:"honorLabels"`
+	// TODO(tamal): simplified, intentionally wrong
+	MetricRelabelings []string `json:"metricRelabelings"`
+	// TODO(tamal): simplified, intentionally wrong
+	Relabelings  []string `json:"relabelings"`
+	TargetLabels []string `json:"targetLabels"`
 }
 
 type ReloaderPodMonitorSpec struct {
+	Enabled     bool              `json:"enabled"`
+	Labels      map[string]string `json:"labels"`
+	Annotations map[string]string `json:"annotations"`
+	HonorLabels bool              `json:"honorLabels"`
+	// TODO(tamal): simplified, intentionally wrong
+	MetricRelabelings []string `json:"metricRelabelings"`
+	// TODO(tamal): simplified, intentionally wrong
+	Relabelings     []string `json:"relabelings"`
+	PodTargetLabels []string `json:"podTargetLabels"`
+}
+
+type ReloaderPodDisruptionBudget struct {
 	Enabled bool `json:"enabled"`
+}
+
+type ReloaderNetpol struct {
+	Enabled bool `json:"enabled"`
+	// +optional
+	From []networking.NetworkPolicyPeer `json:"from"`
+	// +optional
+	To []networking.NetworkPolicyPeer `json:"to"`
 }
 
 // EnvVar represents an environment variable present in a Container.
