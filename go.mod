@@ -11,7 +11,7 @@ require (
 	github.com/prometheus/client_golang v1.19.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
-	go.bytebuilders.dev/lib-selfhost v0.0.10-0.20250121233839-ca6de3d3316a
+	go.bytebuilders.dev/lib-selfhost v0.0.10-0.20250122091523-a057e3cc3574
 	golang.org/x/crypto v0.32.0
 )
 

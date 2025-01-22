@@ -277,7 +277,7 @@ go.bytebuilders.dev/catalog/api/gateway/v1alpha1
 ## explicit; go 1.22.7
 go.bytebuilders.dev/installer/apis/installer
 go.bytebuilders.dev/installer/apis/installer/v1alpha1
-# go.bytebuilders.dev/lib-selfhost v0.0.10-0.20250121233839-ca6de3d3316a
+# go.bytebuilders.dev/lib-selfhost v0.0.10-0.20250122091523-a057e3cc3574
 ## explicit; go 1.22.7
 go.bytebuilders.dev/lib-selfhost/client
 # go.bytebuilders.dev/resource-model v0.1.1-0.20250113073009-6169434829cb

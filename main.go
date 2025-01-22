@@ -109,21 +109,35 @@ func senderChecker(peer smtpd.Peer, addr string) error {
 			}).WithError(err).Warn("could not fetch installer metadata from auth endpoint")
 			return observeErr(smtpd.Error{Code: 451, Message: "Failed to check authentication server"})
 		}
-		if strings.Replace(peer.Username, "@", ".", 1) != md.HostedDomain {
+		if peer.Username != md.OwnerName {
 			log.WithFields(logrus.Fields{
 				"peer":     peer.Addr,
 				"username": peer.Username,
 			}).WithError(err).Warn("auth error")
-			return observeErr(smtpd.Error{Code: 535, Message: "Authentication username does not match installer domain"})
+			return observeErr(smtpd.Error{Code: 535, Message: "Authentication username does not match installer owner name"})
 		}
-		if strings.Replace(addr, "@", ".", 1) != md.HostedDomain {
-			log.WithFields(logrus.Fields{
-				"peer":           peer.Addr,
-				"username":       peer.Username,
-				"sender_address": addr,
-			}).Warn("sender address not allowed for authenticated user")
-			return observeErr(smtpd.Error{Code: 451, Message: "Bad sender address"})
-		}
+
+		/*
+			parts := strings.SplitN(addr, "@", 2)
+			if len(parts) != 2 {
+				log.WithFields(logrus.Fields{
+					"peer":           peer.Addr,
+					"username":       peer.Username,
+					"sender_address": addr,
+				}).WithError(err).Warn("invalid sender address")
+				return observeErr(smtpd.Error{Code: 451, Message: "Bad sender address"})
+			}
+			if parts[1] == info.ProdDomain {
+				if parts[0] != md.RequesterDisplayName {
+					log.WithFields(logrus.Fields{
+						"peer":           peer.Addr,
+						"username":       peer.Username,
+						"sender_address": addr,
+					}).Warn("sender address not allowed for authenticated user")
+					return observeErr(smtpd.Error{Code: 451, Message: "Bad sender address"})
+				}
+			}
+		*/
 	}
 
 	// check sender address from auth file if user is authenticated
