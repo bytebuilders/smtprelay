@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"kmodules.xyz/resource-metadata/apis/shared"
 )
 
 const (
@@ -44,6 +45,8 @@ type CatalogManager struct {
 
 // CatalogManagerSpec is the schema for Identity Server values file
 type CatalogManagerSpec struct {
+	//+optional
+	Proxies shared.RegistryProxies `json:"proxies"`
 	//+optional
 	NameOverride string `json:"nameOverride"`
 	//+optional
@@ -72,9 +75,30 @@ type CatalogManagerSpec struct {
 	Monitoring Monitoring     `json:"monitoring"`
 
 	// +optional
-	VaultServer ObjectReference `json:"vaultServer"`
+	ServiceProviderServiceAccount ObjectReference `json:"serviceProviderServiceAccount"`
 	// +optional
-	SecretReaderServiceAccount ObjectReference `json:"secretReaderServiceAccount"`
+	Keda CatalogManagerKedaSpec `json:"keda"`
+	// +optional
+	Helmrepo ObjectReference            `json:"helmrepo"`
+	Platform CatalogManagerPlatformSpec `json:"platform"`
+}
+
+type CatalogManagerGatewaySpec struct {
+	ClassName     string          `json:"className"`
+	Name          string          `json:"name"`
+	PortRange     string          `json:"portRange"`
+	NodeportRange string          `json:"nodeportRange"`
+	TlsSecretRef  ObjectReference `json:"tlsSecretRef"`
+}
+
+type CatalogManagerKedaSpec struct {
+	ProxyService ObjectReference `json:"proxyService"`
+}
+
+type CatalogManagerPlatformSpec struct {
+	BaseURL string `json:"baseURL"`
+	// +optional
+	CaBundle string `json:"caBundle"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

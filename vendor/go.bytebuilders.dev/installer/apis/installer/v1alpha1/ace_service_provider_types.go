@@ -84,10 +84,10 @@ type ServiceProviderSpec struct {
 }
 
 type ProviderConfig struct {
-	NamespacePrefix    string   `json:"namespacePrefix"`
-	ProviderPrettyName string   `json:"providerPrettyName"`
-	ConsumerScope      string   `json:"consumerScope"`
-	External           External `json:"external"`
+	NamespacePrefix string   `json:"namespacePrefix"`
+	ClusterName     string   `json:"clusterName"`
+	ConsumerScope   string   `json:"consumerScope"`
+	External        External `json:"external"`
 }
 
 type External struct {

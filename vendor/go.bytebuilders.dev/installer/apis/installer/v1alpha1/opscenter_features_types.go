@@ -18,6 +18,8 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	kmapi "kmodules.xyz/client-go/api/v1"
 	"kmodules.xyz/resource-metadata/apis/shared"
 )
 
@@ -52,17 +54,25 @@ type OpscenterFeaturesSpec struct {
 	Image            shared.ImageRegistrySpec `json:"image"`
 	Helm             OpscenterHelmSpec        `json:"helm"`
 	Registry         shared.RegistryInfo      `json:"registry"`
-	ClusterManagers  []string                 `json:"clusterManagers"`
-	CAPI             CapiPresetsSpec          `json:"capi"`
+	ClusterMetadata  kmapi.ClusterInfo        `json:"clusterMetadata"`
+	LicenseServer    LicenseServerSpec        `json:"licenseServer"`
 }
 
 type OpscenterHelmSpec struct {
-	Repositories map[string]*shared.HelmRepository `json:"repositories"`
-	Releases     map[string]*HelmRelease           `json:"releases"`
+	CreateNamespace bool                              `json:"createNamespace"`
+	Repositories    map[string]*shared.HelmRepository `json:"repositories"`
+	Releases        map[string]*HelmRelease           `json:"releases"`
 }
 
 type HelmRelease struct {
-	Version string `json:"version"`
+	Version string                `json:"version"`
+	Values  *runtime.RawExtension `json:"values,omitempty"`
+}
+
+type LicenseServerSpec struct {
+	BaseURL string `json:"baseURL"`
+	// +optional
+	Token string `json:"token"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

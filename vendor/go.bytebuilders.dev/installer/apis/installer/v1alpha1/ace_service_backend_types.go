@@ -72,10 +72,18 @@ type ServiceBackendSpec struct {
 	Tolerations []core.Toleration `json:"tolerations"`
 	// If specified, the pod's scheduling constraints
 	// +optional
-	Affinity   *core.Affinity `json:"affinity"`
-	Ingress    AppIngress     `json:"ingress"`
-	Monitoring Monitoring     `json:"monitoring"`
-	Server     ServerConfig   `json:"server"`
+	Affinity     *core.Affinity     `json:"affinity"`
+	Volumes      []core.Volume      `json:"volumes"`
+	VolumeMounts []core.VolumeMount `json:"volumeMounts"`
+	Ingress      PlatformIngress    `json:"ingress"`
+	Monitoring   Monitoring         `json:"monitoring"`
+	Server       ServerConfig       `json:"server"`
+}
+
+type PlatformIngress struct {
+	AppIngress `json:",inline,omitempty"`
+	// +optional
+	DNS AppIngressDns `json:"dns"`
 }
 
 type ServerConfig struct {
@@ -97,6 +105,11 @@ type OIDC struct {
 type Cookie struct {
 	SigningKey    string `json:"signingKey"`
 	EncryptionKey string `json:"encryptionKey"`
+}
+
+type AppIngressDns struct {
+	// +optional
+	TargetIPs []string `json:"targetIPs"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
